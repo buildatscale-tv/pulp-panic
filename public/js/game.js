@@ -2,12 +2,15 @@
 import { Art, FRUITS, NORMAL_FRUITS, POWER_COLORS, INK, snowflake } from './art.js';
 import { Sfx, Music } from './audio.js';
 import { TROPHIES, findTrophy, roundTrophies } from './trophies.js';
+import { computeMods, levelInfo, pointsAvailable } from './progression.js';
 import { findBlade, findBackdrop, paintBackdrop, makeMotes, moteColor, BLADES, BACKDROPS } from './themes.js';
 import { MODES, Director, POWER_TIME } from './modes.js';
 import { TAU, rand, randInt, pick, clamp, lerp, segDist, easeOutBack, easeOutCubic } from './util.js';
 
 const FONT = '"Lilita One", "Arial Rounded MT Bold", system-ui, sans-serif';
 const TRAIL_LIFE = 0.12;
+// Faint blade for fingers past the blade's finger limit (they do not cut).
+const GHOST_BLADE = { core: 'rgba(255,255,255,0.35)', glow: 'rgba(200,200,230,0.12)', width: 0.8 };
 
 export function drawTrail(ctx, pts, blade, now, unit) {
   const n = pts.length;
@@ -75,6 +78,10 @@ export class Game {
     this.sfx.enabled = store.data.settings.sound;
     this.music = new Music(this.sfx);
     this.music.enabled = store.data.settings.music;
+    this.mods = computeMods(store.data);
+    this.lingers = [];
+    this.shields = { bomb: 0, miss: 0 };
+    this.fireTrail = { comboN: 0, comboTimer: 0 };
     this.lastInput = 0;
     this.showFps = /[?&]fps/.test(location.search);
     this.fps = 60;
@@ -199,6 +206,11 @@ export class Game {
     return findBlade(this.store.data.blade);
   }
 
+  // Recompute skill and blade effects (after a blade change or a skill upgrade).
+  refreshMods() {
+    this.mods = computeMods(this.store.data);
+  }
+
   // ---------- Input ----------
   bindInput() {
     const c = this.canvas;
@@ -244,8 +256,20 @@ export class Game {
   }
 
   startTrail(id, p, kind) {
+    // Each blade allows only so many fingers; extra fingers draw a faint trail that does not cut.
+    let ghost = false;
+    if (kind === 'touch' || kind === 'pen') {
+      let active = 0;
+      for (const t of this.trails.values()) if (t.down && !t.ghost && (t.kind === 'touch' || t.kind === 'pen')) active++;
+      ghost = active >= this.mods.fingers;
+      if (ghost && this.isPlaying() && !this.fingerHintShown) {
+        this.fingerHintShown = true;
+        const n = this.mods.fingers;
+        this.popup(`${this.blade.name} blade: ${n} finger${n > 1 ? 's' : ''}`, p.x, p.y - this.base, 0.75, 'rgba(255,255,255,0.85)');
+      }
+    }
     const tr = {
-      id, kind, down: true, pts: [p], last: p,
+      id, kind, down: true, pts: [p], last: p, ghost,
       startX: p.x, startY: p.y, startT: p.t, moved: 0,
       comboN: 0, comboTimer: 0, comboX: 0, comboY: 0,
     };
@@ -261,8 +285,19 @@ export class Game {
     tr.moved += d;
     const dt = Math.max(0.004, p.t - last.t);
     const speed = d / dt;
-    if (speed > this.minSpeed) this.sliceSegment(tr, last.x, last.y, p.x, p.y, speed);
+    const cuts = !tr.ghost && speed > this.minSpeed * this.mods.minSpeed;
+    if (cuts) {
+      this.sliceSegment(tr, last.x, last.y, p.x, p.y, speed);
+      if (this.mods.perk === 'linger' && this.isPlaying()) {
+        this.lingers.push({ x1: last.x, y1: last.y, x2: p.x, y2: p.y, t: this.realT, ang: Math.atan2(dy, dx) });
+      }
+    }
     if (speed > this.minSpeed * 3.5) this.sfx.swoosh(speed / (this.minSpeed * 6));
+    if (tr.ghost) {
+      tr.pts.push(p);
+      tr.last = p;
+      return;
+    }
     const blade = this.blade;
     if (blade.sparks && speed > this.minSpeed * 1.5 && Math.random() < 0.5) {
       this.spark(p.x, p.y, pick(blade.sparks), -dx / d, -dy / d);
@@ -290,7 +325,7 @@ export class Game {
       if (!f.alive) continue;
       const s = this.art.sprites[f.type];
       const d = segDist(x1, y1, x2, y2, f.x, f.y);
-      if (d >= s.hit) continue;
+      if (d >= s.hit * this.mods.reach) continue;
       if (f.gourd) this.hitGourd(f, ang);
       else if (f.bomb) this.hitBomb(f);
       else this.sliceFruit(f, ang, d / s.hit, tr);
@@ -370,12 +405,18 @@ export class Game {
       this.activatePower(def.power, f.x, f.y);
     }
 
-    let pts = 1;
-    this.addScore(pts, f.x, f.y - s.ry, null, 0.8);
+    if (f.golden) {
+      this.stats.goldSeeds++;
+      this.addScore(3, f.x, f.y - s.ry, 'GOLD', 0.9, '#ffe36b');
+      this.sfx.core();
+      for (let i = 0; i < 14; i++) this.spark(f.x, f.y, pick(['#fff6b0', '#ffd84a', '#ffffff']), Math.cos(i * 0.45), Math.sin(i * 0.45), 6);
+    } else {
+      this.addScore(1, f.x, f.y - s.ry, null, 0.8);
+    }
 
     // Center cut bonus.
-    if (depth < 0.08 && !def.power) {
-      this.addScore(2, f.x, f.y - s.ry - this.base * 0.7, 'BULLSEYE', 0.9, '#7fffd4');
+    if (depth < this.mods.bullZone && !def.power) {
+      this.addScore(this.mods.bullPts, f.x, f.y - s.ry - this.base * 0.7, 'BULLSEYE', 0.9, '#7fffd4');
       this.sfx.core();
       this.stats.bullseyes++;
       if (this.stats.bullseyes >= 10) this.award('bulls10');
@@ -384,7 +425,8 @@ export class Game {
 
     // Multi-fruit combo for this stroke.
     tr.comboN++;
-    tr.comboTimer = 0.22;
+    tr.comboTimer = this.mods.comboWindow;
+    if (this.mods.perk === 'wildfire' && !f.byFire && Math.random() < 0.25) this.igniteNear(f);
     tr.comboX = f.x;
     tr.comboY = f.y;
 
@@ -408,12 +450,13 @@ export class Game {
   finishCombo(tr) {
     const n = tr.comboN;
     tr.comboN = 0;
-    if (n < 3 || this.state === 'menu') return;
+    if (n < this.mods.comboMin || this.state === 'menu') return;
     this.stats.combos++;
     this.stats.maxCombo = Math.max(this.stats.maxCombo, n);
     const x = clamp(tr.comboX, this.W * 0.2, this.W * 0.8);
     const y = clamp(tr.comboY - this.base * 2, this.H * 0.18, this.H * 0.8);
-    this.addScore(n, x, y, `${n} FRUIT COMBO`, 1.2, '#ffd23a');
+    const bonus = Math.round(n * this.mods.comboMult) + this.mods.comboExtra;
+    this.addScore(bonus, x, y, `${n} FRUIT COMBO`, 1.2, '#ffd23a');
     this.sfx.combo(n);
     if (n >= 4) this.award('combo4');
     if (n >= 6) this.award('combo6');
@@ -436,6 +479,13 @@ export class Game {
 
   hitBomb(f) {
     f.alive = false;
+    if (this.shields.bomb > 0 && this.state === 'play') {
+      this.shields.bomb--;
+      for (let i = 0; i < 14; i++) this.addParticle({ x: f.x, y: f.y, vx: rand(-50, 50), vy: rand(-90, 10), r: rand(0.3, 0.6) * this.base, color: 'rgba(90,90,110,0.55)', life: rand(0.6, 1), g: -0.15, kind: 'smoke' });
+      this.popup('FIZZLED!', f.x, f.y - this.base, 1.2, '#9fe8ff');
+      this.sfx.fizzle();
+      return;
+    }
     this.stats.bombs++;
     this.explosion(f.x, f.y);
     this.sfx.bomb(this.mode.bombEndsGame && this.state === 'play');
@@ -451,7 +501,7 @@ export class Game {
       return;
     }
     // Arcade: lose points, keep playing.
-    const loss = Math.min(10, this.score);
+    const loss = Math.min(this.mods.bombPenalty, this.score);
     this.score -= loss;
     this.popup(`-${loss}`, f.x, f.y - this.base, 1.4, '#ff5a5a');
     this.blitz = 0;
@@ -484,7 +534,7 @@ export class Game {
   }
 
   activatePower(kind, x, y) {
-    const dur = POWER_TIME[kind];
+    const dur = POWER_TIME[kind] + this.mods.powerExtra;
     this.powers[kind] = Math.min(dur * 1.6, Math.max(0, this.powers[kind]) + dur);
     this.stats.powers.add(kind);
     if (this.stats.powers.size >= 3) this.award('powers3');
@@ -515,6 +565,10 @@ export class Game {
       this.addParticle({ x: px, y: py, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: rand(0.07, 0.15) * this.base, color: pick(['#ffc23a', '#fff09a', '#ff9a1f']), life: 0.6, g: 1 });
     }
     this.score += 1;
+    if (this.mods.gourdBonus && f.hits % 10 === 0) {
+      this.score += 1;
+      this.popup('+1 SMASH', px, py - this.base, 0.9, '#ffe36b');
+    }
     this.stats.gourd = f.hits;
     this.sfx.gourdHit(f.hits);
     if (f.hits >= 30) this.award('gourd30');
@@ -552,6 +606,65 @@ export class Game {
       this.ui.toast(`Trophy: ${t.name}`, `+${t.seeds} seeds`);
     }
     return t;
+  }
+
+  // Wildfire perk: set the nearest uncut fruit on fire; it bursts a moment later.
+  igniteNear(from) {
+    let best = null, bestD = this.base * 9;
+    for (const o of this.fruits) {
+      if (!o.alive || o.bomb || o.gourd || o.burn > 0 || o === from) continue;
+      const d = Math.hypot(o.x - from.x, o.y - from.y);
+      if (d < bestD) { best = o; bestD = d; }
+    }
+    if (!best) return;
+    best.burn = 0.55;
+    for (let i = 0; i < 10; i++) {
+      const k = i / 10;
+      this.addParticle({ x: from.x + (best.x - from.x) * k, y: from.y + (best.y - from.y) * k, vx: rand(-30, 30), vy: rand(-60, -20), r: rand(1.5, 3), color: pick(['#ffb13a', '#ff5a1f', '#ffe36b']), life: 0.4, g: -0.1, kind: 'spark' });
+    }
+  }
+
+  // Per-frame blade perks: lingering venom line and the gravity well.
+  updatePerks(gdt) {
+    const active = this.state === 'play' || this.state === 'finale';
+    if (this.lingers.length) {
+      this.lingers = this.lingers.filter((l) => this.realT - l.t < 0.3);
+      if (active) {
+        for (const f of this.fruits) {
+          if (!f.alive || f.bomb || f.gourd) continue;
+          const s = this.art.sprites[f.type];
+          for (const l of this.lingers) {
+            const d = segDist(l.x1, l.y1, l.x2, l.y2, f.x, f.y);
+            if (d < s.hit * this.mods.reach) {
+              this.sliceFruit(f, l.ang, d / s.hit, this.fireTrail);
+              break;
+            }
+          }
+        }
+      }
+    }
+    if (this.mods.perk === 'gravity' && active && gdt > 0) {
+      const R = this.base * 5.5;
+      const nowT = performance.now() / 1000;
+      for (const tr of this.trails.values()) {
+        if (!tr.down || tr.ghost || !tr.pts.length || nowT - tr.last.t > 0.15) continue;
+        const h = tr.last;
+        for (const f of this.fruits) {
+          if (!f.alive || f.gourd) continue;
+          const dx = h.x - f.x, dy = h.y - f.y;
+          const d = Math.hypot(dx, dy) || 1;
+          if (d > R) continue;
+          const k = 1 - d / R;
+          const pull = (f.bomb ? -1.4 : 1) * k * this.base * 34 * gdt;
+          f.vx += (dx / d) * pull;
+          f.vy += (dy / d) * pull;
+          if (!f.bomb) {
+            f.vx *= 1 - k * 1.6 * gdt;
+            f.vy *= 1 - k * 0.8 * gdt;
+          }
+        }
+      }
+    }
   }
 
   spark(x, y, color, dx, dy, speed = 4) {
@@ -608,6 +721,7 @@ export class Game {
       alive: true, bomb: !!def.bomb, power: def.power || null, side: !!spec.side,
       born: this.realT, gourd: false,
     };
+    if (this.mods.perk === 'midas' && !f.bomb && !f.power && spec.type !== 'gourd' && this.state === 'play' && Math.random() < 0.12) f.golden = true;
     this.fruits.push(f);
     if (!f.bomb && !f.side && spec.type !== 'gourd') this.stats.launched++;
     if (!f.side || Math.random() < 0.3) this.sfx.launch();
@@ -626,8 +740,8 @@ export class Game {
     f.phase = 'rise';
     f.hits = 0;
     f.lastHit = 0;
-    f.window = 4.2;
-    f.windowMax = 4.2;
+    f.window = 4.2 + this.mods.gourdExtra;
+    f.windowMax = f.window;
     f.squash = 0;
     f.ox = 0;
     f.oy = 0;
@@ -672,6 +786,7 @@ export class Game {
 
   toMenu() {
     if (this.paused) this.music.duck(false);
+    this.refreshMods();
     this.paused = false;
     this.state = 'menu';
     this.clearWorld(true);
@@ -781,13 +896,17 @@ export class Game {
     this.blitzLevel = 0;
     this.lastSlice = -1;
     this.lastTick = -1;
-    this.timeLeft = this.mode.time;
+    this.refreshMods();
+    this.timeLeft = this.mode.time ? this.mode.time + this.mods.timeBonus : 0;
+    this.shields = { bomb: this.mods.bombShield, miss: this.mode.strikes ? this.mods.missShield : 0 };
+    this.lingers = [];
+    this.fingerHintShown = false;
     this.spawning = false;
     this.endAt = 0;
     this.endReason = null;
     this.gourdLaunched = false;
     this.roundSeedsStart = this.store.data.seeds;
-    this.stats = { bullseyes: 0, sliced: 0, slicedThrown: 0, launched: 0, combos: 0, maxCombo: 0, bombs: 0, missed: 0, blitzMax: 0, gourd: 0, powers: new Set() };
+    this.stats = { goldSeeds: 0, fireBursts: 0, bullseyes: 0, sliced: 0, slicedThrown: 0, launched: 0, combos: 0, maxCombo: 0, bombs: 0, missed: 0, blitzMax: 0, gourd: 0, powers: new Set() };
     this.state = 'ready';
     this.readyT = 0;
     this.trails.clear();
@@ -814,6 +933,12 @@ export class Game {
   }
 
   strike(x) {
+    if (this.shields.miss > 0) {
+      this.shields.miss--;
+      this.sfx.lifeUp();
+      this.popup('SAVED!', clamp(x, this.base * 2, this.W - this.base * 2), this.H - this.base * 1.4, 1.3, '#7dff8a');
+      return;
+    }
     this.strikes++;
     this.stats.missed++;
     this.sfx.strike();
@@ -829,7 +954,7 @@ export class Game {
   }
 
   checkLifeUp() {
-    const mark = Math.floor(this.score / 100);
+    const mark = Math.floor(this.score / this.mods.lifeEvery);
     if (mark > this.lifeMark) {
       this.lifeMark = mark;
       if (this.strikes > 0 && this.state === 'play') {
@@ -863,8 +988,11 @@ export class Game {
     const newBest = total > prevBest;
     if (newBest) d.best[mode.id] = total;
     const seedsBefore = this.roundSeedsStart ?? d.seeds;
-    const seeds = Math.floor(total / 10) + (newBest && total > 0 ? 5 : 0);
+    const seeds = Math.round((Math.floor(total / 10) + (newBest && total > 0 ? 5 : 0) + st.goldSeeds) * this.mods.seedMul);
     d.seeds += seeds;
+    const levelBefore = levelInfo(d.xp || 0);
+    d.xp = (d.xp || 0) + total;
+    const levelAfter = levelInfo(d.xp);
     d.games++;
     d.fruits += st.sliced;
     d.bestCombo = Math.max(d.bestCombo, st.maxCombo);
@@ -888,6 +1016,7 @@ export class Game {
       mode, reason: this.endReason, base, total, bonuses, newBest, best: Math.max(prevBest, total),
       sliced: st.sliced, accuracy: acc, maxCombo: st.maxCombo, combos: st.combos, bombs: st.bombs,
       gourd: st.gourd, seeds, totalSeeds: d.seeds, unlocked, trophies,
+      xpGain: total, levelBefore, levelAfter, points: pointsAvailable(d),
     });
   }
 
@@ -990,12 +1119,28 @@ export class Game {
     }
 
     // Fruits.
+    this.updatePerks(gdt);
     const g = this.gravity;
     for (const f of this.fruits) {
       if (!f.alive) continue;
       if (f.gourd) {
         this.updateGourd(f, dt, gdt);
         continue;
+      }
+      if (f.burn > 0) {
+        f.burn -= gdt;
+        if (Math.random() < 0.7) this.addParticle({ x: f.x + rand(-0.5, 0.5) * this.base, y: f.y - this.base * 0.4, vx: rand(-25, 25), vy: rand(-140, -60), r: rand(1.5, 3.5), color: pick(['#ffb13a', '#ff5a1f', '#ffe36b']), life: 0.45, g: -0.1, kind: 'spark' });
+        if (f.burn <= 0 && (this.state === 'play' || this.state === 'finale')) {
+          f.byFire = true;
+          this.stats.fireBursts++;
+          this.sliceFruit(f, rand(0, TAU), 0.5, this.fireTrail);
+          this.popup('BURN', f.x, f.y - this.base * 1.6, 0.8, '#ffb13a');
+          continue;
+        }
+      }
+      if (f.golden && Math.random() < 0.3) {
+        const s0 = this.art.sprites[f.type];
+        this.addParticle({ x: f.x + rand(-1, 1) * s0.r, y: f.y + rand(-1, 1) * s0.r, vx: 0, vy: rand(-30, -10), r: rand(1, 2.2), color: '#fff6b0', life: 0.5, g: 0, kind: 'spark' });
       }
       f.vy += g * gdt;
       f.x += f.vx * gdt;
@@ -1198,7 +1343,17 @@ export class Game {
     // Blade trails (not shaken).
     const blade = this.blade;
     const now = performance.now() / 1000;
-    for (const tr of this.trails.values()) drawTrail(ctx, tr.pts, blade, now, this.base);
+    for (const l of this.lingers) {
+      const a = 1 - (this.realT - l.t) / 0.3;
+      ctx.strokeStyle = `rgba(125,255,74,${0.55 * a})`;
+      ctx.lineWidth = this.base * 0.14 * a;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(l.x1, l.y1);
+      ctx.lineTo(l.x2, l.y2);
+      ctx.stroke();
+    }
+    for (const tr of this.trails.values()) drawTrail(ctx, tr.pts, tr.ghost ? GHOST_BLADE : blade, now, this.base);
 
     this.drawPowerFx();
 
@@ -1240,6 +1395,24 @@ export class Game {
     ctx.globalAlpha = 1;
   }
 
+  // Midas perk: recolor the fruit to gold, keeping its shading.
+  goldTint(f, s) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.rotate(f.rot);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s.rx, s.ry, 0, 0, TAU);
+    ctx.clip();
+    ctx.globalCompositeOperation = 'color';
+    ctx.fillStyle = '#ffc400';
+    ctx.fillRect(-s.rx * 1.2, -s.ry * 1.2, s.rx * 2.4, s.ry * 2.4);
+    ctx.globalCompositeOperation = 'soft-light';
+    ctx.fillStyle = 'rgba(255,240,170,0.6)';
+    ctx.fillRect(-s.rx * 1.2, -s.ry * 1.2, s.rx * 2.4, s.ry * 2.4);
+    ctx.restore();
+  }
+
   // Fixed light from the top-left, clipped to the (rotating) fruit outline.
   shade(x, y, rot, rx, ry) {
     const ctx = this.ctx;
@@ -1273,6 +1446,28 @@ export class Game {
     const ctx = this.ctx;
     const s = this.art.sprites[f.type];
     if (f.power) this.drawAura(f, s);
+    if (f.burn > 0) {
+      const g = ctx.createRadialGradient(f.x, f.y, s.r * 0.5, f.x, f.y, s.r * 1.8);
+      g.addColorStop(0, `rgba(255,140,30,${0.45 + Math.random() * 0.2})`);
+      g.addColorStop(1, 'rgba(255,80,0,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, s.r * 1.8, 0, TAU);
+      ctx.fill();
+    }
+    if (f.bomb && this.mods.bombWarn && this.isPlaying()) {
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.rotate(-this.realT * 2);
+      ctx.strokeStyle = `rgba(255,70,60,${0.55 + 0.35 * Math.sin(this.realT * 10)})`;
+      ctx.lineWidth = Math.max(2, s.r * 0.09);
+      ctx.setLineDash([s.r * 0.3, s.r * 0.2]);
+      ctx.beginPath();
+      ctx.arc(0, 0, s.r * 1.55, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
     if (f.bomb) {
       const pulse = 0.5 + 0.5 * Math.sin(this.realT * 12);
       const g = ctx.createRadialGradient(f.x, f.y, s.r * 0.6, f.x, f.y, s.r * 1.9);
@@ -1294,6 +1489,7 @@ export class Game {
     if (f.gourd) this.drawGourdCracks(f, s);
     ctx.restore();
     this.shade(f.x + (f.ox || 0), f.y + (f.oy || 0), f.rot, s.rx, s.ry);
+    if (f.golden) this.goldTint(f, s);
     this.drawGloss(f.x + (f.ox || 0), f.y + (f.oy || 0), s);
     if (f.bomb) {
       const tip = this.fuseTip(f, s);

@@ -3,6 +3,7 @@ import { BLADES, BACKDROPS, paintBackdrop } from './themes.js';
 import { MODES } from './modes.js';
 import { drawTrail } from './game.js';
 import { TROPHIES } from './trophies.js';
+import { SKILLS, levelInfo, pointsAvailable, skillRank } from './progression.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -14,6 +15,7 @@ export class UI {
       hud: $('#hud'), score: $('#score'), best: $('#best'), timer: $('#timer'), strikes: $('#strikes'),
       menu: $('#menu'), menuSeeds: $('#menuSeeds'), pause: $('#pause'), results: $('#results'),
       collection: $('#collection'), settings: $('#settings'), howto: $('#howto'), colGrid: $('#colGrid'),
+      skills: $('#skills'),
     };
     this.chips = {};
     document.querySelectorAll('.chip').forEach((c) => (this.chips[c.dataset.power] = { el: c, bar: c.querySelector('i') }));
@@ -40,6 +42,7 @@ export class UI {
       if (g) g.sfx.ui();
       const act = btn.dataset.act;
       if (act === 'collection') this.openCollection();
+      else if (act === 'skills') this.openSkills();
       else if (act === 'howto') this.open('howto');
       else if (act === 'settings') this.openSettings();
       else if (act === 'fullscreen') this.toggleFullscreen();
@@ -69,7 +72,7 @@ export class UI {
     // Close a modal when its dark backdrop is tapped.
     document.querySelectorAll('.modal').forEach((m) =>
       m.addEventListener('pointerdown', (e) => {
-        if (e.target === m && (m.id === 'collection' || m.id === 'settings' || m.id === 'howto')) this.closeModals();
+        if (e.target === m && ['collection', 'settings', 'howto', 'skills'].includes(m.id)) this.closeModals();
       }),
     );
 
@@ -107,6 +110,7 @@ export class UI {
           this.game.music.enabled = this.store.data.settings.music;
           this.game.music.fade();
           this.game.applyBackdrop();
+          this.game.refreshMods();
         }
         this.openSettings();
         this.updateSeeds();
@@ -119,6 +123,14 @@ export class UI {
 
     const fsOk = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
     if (!fsOk) $('#fsBtn').hidden = true;
+
+    $('#skReset').addEventListener('click', () => {
+      this.store.data.skills = {};
+      this.store.save();
+      if (this.game) this.game.refreshMods();
+      this.renderSkills();
+      this.updateSeeds();
+    });
 
     $('#tipClose').addEventListener('click', () => {
       this.store.data.tipDismissed = true;
@@ -164,11 +176,66 @@ export class UI {
   }
 
   closeModals() {
-    for (const id of ['collection', 'settings', 'howto']) this.el[id].hidden = true;
+    for (const id of ['collection', 'settings', 'howto', 'skills']) this.el[id].hidden = true;
+    this.updateSeeds();
   }
 
+  // Menu pill: level, XP bar and seeds. Badge on Skills when points are waiting.
   updateSeeds() {
-    this.el.menuSeeds.textContent = `${this.store.data.seeds} seeds`;
+    const d = this.store.data;
+    const lv = levelInfo(d.xp || 0);
+    this.el.menuSeeds.innerHTML = `<span class="lv">LV ${lv.level}</span><span class="xpbar" title="${lv.into} / ${lv.need} XP"><i style="width:${Math.round(lv.frac * 100)}%"></i></span><span class="sd">${d.seeds} seeds</span>`;
+    const pts = pointsAvailable(d);
+    const badge = $('#skillsBadge');
+    badge.hidden = pts === 0;
+    badge.textContent = pts;
+  }
+
+  openSkills() {
+    this.open('skills');
+    this.renderSkills();
+  }
+
+  renderSkills() {
+    const d = this.store.data;
+    if (!d.skills) d.skills = {};
+    const lv = levelInfo(d.xp || 0);
+    const pts = pointsAvailable(d);
+    $('#skLevel').textContent = `Level ${lv.level}`;
+    $('#skXp').textContent = lv.need ? `${lv.into} / ${lv.need} XP` : 'Max level';
+    $('#skFill').style.width = `${Math.round(lv.frac * 100)}%`;
+    $('#skMeter').setAttribute('aria-valuenow', Math.round(lv.frac * 100));
+    $('#skPoints').textContent = pts;
+    const grid = $('#skillGrid');
+    grid.innerHTML = '';
+    for (const sk of SKILLS) {
+      const rank = skillRank(d, sk.id);
+      const el = document.createElement('div');
+      el.className = 'skill' + (rank >= 3 ? ' maxed' : '');
+      el.innerHTML = `<div class="sk-head"><div class="sk-icon"></div><div><div class="sk-name"></div><div class="pips">${[1, 2, 3].map((i) => `<i class="${i <= rank ? 'on' : ''}"></i>`).join('')}</div></div></div>`
+        + `<div class="sk-now"></div><div class="sk-next"></div>`;
+      el.querySelector('.sk-icon').textContent = sk.icon;
+      el.querySelector('.sk-name').textContent = sk.name;
+      el.querySelector('.sk-now').textContent = rank ? sk.effects[rank] : 'Not learned yet';
+      el.querySelector('.sk-next').textContent = rank < 3 ? `Next: ${sk.effects[rank + 1]}` : 'Maxed out';
+      const btn = document.createElement('button');
+      btn.className = 'btn' + (rank < 3 && pts > 0 ? ' primary' : '');
+      btn.textContent = rank >= 3 ? 'Max' : rank ? 'Upgrade' : 'Learn';
+      btn.disabled = rank >= 3 || pts === 0;
+      btn.addEventListener('click', () => {
+        if (pointsAvailable(this.store.data) <= 0 || skillRank(this.store.data, sk.id) >= 3) return;
+        this.store.data.skills[sk.id] = skillRank(this.store.data, sk.id) + 1;
+        this.store.save();
+        if (this.game) {
+          this.game.refreshMods();
+          this.game.sfx.lifeUp();
+        }
+        this.renderSkills();
+        this.updateSeeds();
+      });
+      el.appendChild(btn);
+      grid.appendChild(el);
+    }
   }
 
   showMenu() {
@@ -189,8 +256,9 @@ export class UI {
     this.el.best.textContent = `BEST ${best || 0}`;
     this.el.timer.hidden = !mode.time;
     this.el.strikes.hidden = !mode.strikes;
-    this.shown = { score: -1, time: -1, strikes: -1, urgent: null, frozen: null };
+    this.shown = { score: -1, time: -1, strikes: -1, urgent: null, frozen: null, shield: null };
     for (const c of Object.values(this.chips)) c.el.hidden = true;
+    $('#shieldChip').hidden = true;
   }
 
   updateHud(g) {
@@ -220,6 +288,14 @@ export class UI {
     if (g.mode.strikes && g.strikes !== sh.strikes) {
       sh.strikes = g.strikes;
       this.el.strikes.querySelectorAll('b').forEach((b, i) => b.classList.toggle('hit', i < g.strikes));
+    }
+    const shd = g.shields || { bomb: 0, miss: 0 };
+    const shieldText = [shd.bomb ? 'BOMB' : '', shd.miss ? 'MISS' : ''].filter(Boolean).join(' + ');
+    if (shieldText !== this.shown.shield) {
+      this.shown.shield = shieldText;
+      const chip = $('#shieldChip');
+      chip.hidden = !shieldText;
+      chip.querySelector('span').textContent = shieldText ? `${shieldText} SHIELD` : '';
     }
     for (const [k, c] of Object.entries(this.chips)) {
       const t = g.powers[k];
@@ -257,6 +333,17 @@ export class UI {
     const un = $('#resUnlock');
     un.hidden = !r.unlocked.length;
     un.textContent = r.unlocked.length ? `New: ${r.unlocked.join(', ')}! Open Collection to use it.` : '';
+    const xp = $('#resXp');
+    const a = r.levelBefore, b = r.levelAfter;
+    const ups = b.level - a.level;
+    xp.innerHTML = `<div class="lv-row"><b>Level ${b.level}</b><span>+${r.xpGain} XP · ${b.need ? `${b.into} / ${b.need}` : 'max'}</span></div>`
+      + `<div class="mb big"><i style="width:${Math.round((ups ? 0 : a.frac) * 100)}%"></i></div>`
+      + (ups ? `<div class="lvup">LEVEL UP! +${ups} skill point${ups > 1 ? 's' : ''}. Open Skills on the menu.</div>` : '');
+    requestAnimationFrame(() => {
+      const fill = xp.querySelector('.mb i');
+      fill.style.transition = 'width 0.9s cubic-bezier(.2,.8,.2,1)';
+      requestAnimationFrame(() => (fill.style.width = `${Math.round(b.frac * 100)}%`));
+    });
     const tr = $('#resTrophy');
     tr.hidden = !r.trophies.length;
     tr.textContent = r.trophies.length ? `Trophy: ${r.trophies.map((t) => `${t.name} (+${t.seeds})`).join(', ')}` : '';
@@ -407,11 +494,25 @@ export class UI {
       st.className = 'st';
       st.textContent = locked ? `Needs ${item.need} seeds` : item.id === current ? 'Equipped' : 'Tap to use';
       btn.append(nm, st);
+      if (this.tab === 'blades') {
+        const fingers = document.createElement('div');
+        fingers.className = 'fingers';
+        fingers.textContent = `${item.fingers} finger${item.fingers > 1 ? 's' : ''}`;
+        const perk = document.createElement('div');
+        perk.className = 'perk';
+        perk.innerHTML = `<b></b> <span></span>`;
+        perk.querySelector('b').textContent = `${item.perkName}:`;
+        perk.querySelector('span').textContent = item.perkDesc;
+        btn.append(fingers, perk);
+      }
       grid.appendChild(btn);
       this.paintPreview(cv, item);
       btn.addEventListener('click', () => {
         if (locked) return;
-        if (this.tab === 'blades') d.blade = item.id;
+        if (this.tab === 'blades') {
+          d.blade = item.id;
+          if (this.game) this.game.refreshMods();
+        }
         else {
           d.backdrop = item.id;
           if (this.game) this.game.applyBackdrop();

@@ -1,13 +1,20 @@
 // Backdrops and blade styles. "need" = lifetime seeds required to unlock.
 import { TAU, rand } from './util.js';
 
+// fingers: how many touches can cut at once. perk: a gameplay effect (see game.js).
 export const BLADES = [
-  { id: 'spark', name: 'Spark', need: 0, core: '#ffffff', glow: 'rgba(120,225,255,0.55)', width: 1 },
-  { id: 'ember', name: 'Ember', need: 120, core: '#fff3c4', glow: 'rgba(255,110,30,0.65)', width: 1.1, sparks: ['#ffb13a', '#ff5a1f', '#ffe36b'] },
-  { id: 'venom', name: 'Venom', need: 300, core: '#f2ffd8', glow: 'rgba(110,255,80,0.55)', width: 1, drips: '#7dff4a' },
-  { id: 'prism', name: 'Prism', need: 550, core: '#ffffff', glow: 'hue', width: 1.15 },
-  { id: 'void', name: 'Void', need: 900, core: '#ffffff', glow: 'rgba(150,70,255,0.7)', width: 1.25, outer: 'rgba(20,0,40,0.5)' },
-  { id: 'gilded', name: 'Gilded', need: 1400, core: '#fffbe0', glow: 'rgba(255,200,40,0.7)', width: 1.15, sparks: ['#fff6b0', '#ffd84a', '#ffffff'] },
+  { id: 'spark', name: 'Spark', need: 0, core: '#ffffff', glow: 'rgba(120,225,255,0.55)', width: 1,
+    fingers: 1, perk: null, perkName: 'Starter', perkDesc: 'A clean, simple blade.' },
+  { id: 'ember', name: 'Ember', need: 120, core: '#fff3c4', glow: 'rgba(255,110,30,0.65)', width: 1.1, sparks: ['#ffb13a', '#ff5a1f', '#ffe36b'],
+    fingers: 2, perk: 'wildfire', perkName: 'Wildfire', perkDesc: 'A cut can set a nearby fruit on fire. It bursts for +1.' },
+  { id: 'venom', name: 'Venom', need: 300, core: '#f2ffd8', glow: 'rgba(110,255,80,0.55)', width: 1, drips: '#7dff4a',
+    fingers: 2, perk: 'linger', perkName: 'Lingering Venom', perkDesc: 'Your cut line stays sharp for a moment. It cuts fruit, never bombs.' },
+  { id: 'prism', name: 'Prism', need: 550, core: '#ffffff', glow: 'hue', width: 1.15,
+    fingers: 3, perk: 'spectrum', perkName: 'Spectrum', perkDesc: 'Combos start at 2 fruit and pay 50% more.' },
+  { id: 'void', name: 'Void', need: 900, core: '#ffffff', glow: 'rgba(150,70,255,0.7)', width: 1.25, outer: 'rgba(20,0,40,0.5)',
+    fingers: 4, perk: 'gravity', perkName: 'Gravity Well', perkDesc: 'Fruit drifts toward your blade. Bombs drift away.' },
+  { id: 'gilded', name: 'Gilded', need: 1400, core: '#fffbe0', glow: 'rgba(255,200,40,0.7)', width: 1.15, sparks: ['#fff6b0', '#ffd84a', '#ffffff'],
+    fingers: 5, perk: 'midas', perkName: 'Midas', perkDesc: 'Some fruit turns gold: +3 points and a seed each.' },
 ];
 
 export const BACKDROPS = [

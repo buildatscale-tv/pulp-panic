@@ -31,7 +31,7 @@ export class Director {
     this.waves = 0;
     this.nextWave = 0.35;
     this.queue = [];
-    this.nextPower = mode.powerups ? rand(4.5, 7) : Infinity;
+    this.nextPower = mode.powerups ? rand(4.5, 7) / game.mods.powerFreq : Infinity;
     this.lastPower = null;
     this.frenzyNext = 0;
   }
@@ -80,7 +80,7 @@ export class Director {
     this.nextPower -= dt;
     if (this.nextPower <= 0) {
       if (g.timeLeft > 5) this.power();
-      this.nextPower = rand(7, 11);
+      this.nextPower = rand(7, 11) / g.mods.powerFreq;
     }
   }
 

@@ -257,6 +257,11 @@ export class Sfx {
     this.tone({ f0: f, f1: f, dur: 0.12, type: 'triangle', gain: 0.16 });
   }
 
+  fizzle() {
+    this.noise({ dur: 0.4, type: 'highpass', f0: 3500, f1: 900, q: 0.7, gain: 0.22 });
+    this.tone({ f0: 240, f1: 70, dur: 0.3, type: 'triangle', gain: 0.12, delay: 0.05 });
+  }
+
   trophy() {
     [784, 1046, 1318, 1568, 2093].forEach((f, i) => this.tone({ f0: f, f1: f, dur: 0.18, type: 'triangle', gain: 0.14, delay: i * 0.07 }));
   }

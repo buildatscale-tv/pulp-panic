@@ -12,6 +12,8 @@ const defaults = () => ({
   v: 2,
   settings: { sound: true, music: true, shake: true, mouseHold: true },
   trophies: {},
+  xp: 0,
+  skills: {},
   tipDismissed: false,
 });
 
@@ -23,7 +25,7 @@ export class Store {
       if (raw) {
         const saved = JSON.parse(raw);
         const d = defaults();
-        this.data = { ...d, ...saved, best: { ...d.best, ...saved.best }, settings: { ...d.settings, ...saved.settings }, trophies: { ...saved.trophies } };
+        this.data = { ...d, ...saved, best: { ...d.best, ...saved.best }, settings: { ...d.settings, ...saved.settings }, trophies: { ...saved.trophies }, skills: { ...saved.skills } };
       }
     } catch {
       // Keep defaults.
