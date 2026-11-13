@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#160b2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pulp Panic">
+<meta name="description" content="Swipe to slice fruit, dodge bombs, and chase combos. An arcade fruit-slicing game for browsers and iPad.">
+<title>Pulp Panic</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css?v=3">
+</head>
+<body>
+<canvas id="game" aria-label="Game area. Swipe to slice."></canvas>
+
+<div id="ui">
+  <!-- In-game HUD -->
+  <header id="hud" class="hud" hidden>
+    <div class="hud-score">
+      <div class="score-row"><img id="scoreIcon" class="score-icon" alt=""><div id="score" class="score">0</div></div>
+      <div id="best" class="best">BEST 0</div>
+    </div>
+    <div id="powers" class="powers">
+      <div class="chip" data-power="frost" hidden><span>FREEZE</span><i></i></div>
+      <div class="chip" data-power="frenzy" hidden><span>FRENZY</span><i></i></div>
+      <div class="chip" data-power="double" hidden><span>DOUBLE ×2</span><i></i></div>
+    </div>
+    <div class="hud-right">
+      <div id="timer" class="timer" hidden>60</div>
+      <div id="strikes" class="strikes" hidden><b></b><b></b><b></b></div>
+      <button id="pauseBtn" class="icon-btn" aria-label="Pause">
+        <svg viewBox="0 0 24 24" width="22" height="22"><rect x="6" y="5" width="4" height="14" rx="1.5"/><rect x="14" y="5" width="4" height="14" rx="1.5"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Title / mode select (modes are sliced on the canvas) -->
+  <section id="menu" class="screen menu">
+    <h1 class="logo" aria-label="Pulp Panic"><span class="l1">PULP</span><span class="l2">PANIC</span></h1>
+    <p class="hint">Slice a fruit to start</p>
+    <div id="menuSeeds" class="seeds-pill"></div>
+    <div id="tip" class="tip" hidden>
+      <span>For full screen: tap <b>Share</b>, then <b>Add to Home Screen</b>.</span>
+      <button class="icon-btn tiny" id="tipClose" aria-label="Hide tip">✕</button>
+    </div>
+    <div class="grow"></div>
+    <nav class="menu-bar">
+      <button class="btn small" data-act="collection">Collection</button>
+      <button class="btn small" data-act="howto"><span class="long">How to play</span><span class="short">Help</span></button>
+      <button class="btn small" data-act="settings">Settings</button>
+      <button class="btn small" data-act="fullscreen" id="fsBtn"><span class="long">Full screen</span><span class="short">Full</span></button>
+    </nav>
+  </section>
+
+  <div id="toast" class="toast" hidden><b></b><span></span></div>
+
+  <!-- Pause -->
+  <section id="pause" class="screen modal" hidden>
+    <div class="card narrow">
+      <h2>Paused</h2>
+      <div class="col">
+        <button class="btn primary" data-act="resume">Resume</button>
+        <button class="btn" data-act="restart">Restart</button>
+        <button class="btn" data-act="quit">Quit to menu</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section id="results" class="screen modal" hidden>
+    <div class="card results">
+      <div id="resTitle" class="res-title">TIME'S UP!</div>
+      <div id="resMode" class="res-mode">Arcade</div>
+      <div id="resScore" class="res-score">0</div>
+      <div id="resBest" class="res-best"></div>
+      <ul id="resBonus" class="res-bonus"></ul>
+      <div id="resStats" class="res-stats"></div>
+      <div id="resSeeds" class="res-seeds"></div>
+      <div id="resUnlock" class="res-unlock" hidden></div>
+      <div id="resTrophy" class="res-trophy" hidden></div>
+      <div class="row">
+        <button class="btn primary" data-act="retry">Play again</button>
+        <button class="btn" data-act="menu">Menu</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Collection -->
+  <section id="collection" class="screen modal" hidden>
+    <div class="card wide">
+      <div class="card-head">
+        <h2>Collection</h2>
+        <button class="icon-btn close" data-act="close" aria-label="Close">✕</button>
+      </div>
+      <p class="sub">Earn seeds in every round. Seeds unlock new blades and backdrops.</p>
+      <div class="tabs">
+        <button class="tab on" data-tab="blades">Blades</button>
+        <button class="tab" data-tab="backdrops">Backdrops</button>
+        <button class="tab" data-tab="trophies">Trophies</button>
+      </div>
+      <div id="colGrid" class="grid"></div>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section id="settings" class="screen modal" hidden>
+    <div class="card narrow">
+      <div class="card-head">
+        <h2>Settings</h2>
+        <button class="icon-btn close" data-act="close" aria-label="Close">✕</button>
+      </div>
+      <label class="toggle"><input type="checkbox" id="setSound"><span>Sound effects</span></label>
+      <label class="toggle"><input type="checkbox" id="setMusic"><span>Music</span></label>
+      <label class="toggle"><input type="checkbox" id="setShake"><span>Screen shake</span></label>
+      <label class="toggle"><input type="checkbox" id="setMouse"><span>Mouse: hold button to slice</span></label>
+      <button class="btn danger" id="resetBtn">Reset progress</button>
+      <p class="sub" id="statsLine"></p>
+    </div>
+  </section>
+
+  <!-- How to play -->
+  <section id="howto" class="screen modal" hidden>
+    <div class="card wide">
+      <div class="card-head">
+        <h2>How to play</h2>
+        <button class="icon-btn close" data-act="close" aria-label="Close">✕</button>
+      </div>
+      <div class="howto">
+        <div class="how-block">
+          <h3>Slice</h3>
+          <p>Swipe across fruit to cut it. Use more fingers on a touch screen. With a mouse, hold the button and drag.</p>
+          <p>Cut 3 or more fruit in one swipe for a <b>combo</b>. Cut through the exact center for a <b>bullseye</b>. Cut fast, many times in a row, for a <b>blitz</b>.</p>
+        </div>
+        <div class="how-block">
+          <h3>Modes</h3>
+          <p><b class="c-arcade">Arcade</b>: 60 seconds. A bomb costs 10 points. Catch power-ups. At the end, slash the Grand Gourd as many times as you can.</p>
+          <p><b class="c-classic">Classic</b>: no timer. If you miss 3 fruit, you lose. If you cut a bomb, you lose. Each 100 points gives back one miss.</p>
+          <p><b class="c-zen">Zen</b>: 90 seconds with no bombs.</p>
+        </div>
+        <div class="how-block">
+          <h3>Arcade power-ups</h3>
+          <p><span class="dot frost"></span><b>Frostberry</b>: time goes slow. The clock goes slow too.</p>
+          <p><span class="dot frenzy"></span><b>Blazefig</b>: fruit flies in from the sides.</p>
+          <p><span class="dot double"></span><b>Goldenberry</b>: all points are doubled.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+
+<script type="module" src="js/main.js?v=2"></script>
+</body>
+</html>
