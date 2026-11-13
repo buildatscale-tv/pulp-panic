@@ -369,6 +369,8 @@ canvas#game {
 .c-arcade { color: #c25a00; }
 .c-classic { color: #c4161f; }
 .c-zen { color: #2f7d1c; }
+.credit { margin: 18px 0 0; padding-top: 12px; border-top: 2px dashed rgba(42, 21, 51, 0.25); font-size: 14px; font-weight: 800; text-align: center; }
+.credit a { color: #b5420f; text-decoration-thickness: 2px; text-underline-offset: 3px; pointer-events: auto; }
 .dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink); margin-right: 6px; vertical-align: -2px; }
 .dot.frost { background: var(--frost); }
 .dot.frenzy { background: var(--frenzy); }
