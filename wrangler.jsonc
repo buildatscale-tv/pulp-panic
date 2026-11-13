@@ -1,0 +1,17 @@
+// Static Worker that serves the game at buildatscale.tv/pulp.
+// The route only matches /pulp paths; the main buildatscale.tv site is a separate Worker.
+// Build first: ./tools/build.sh  (copies public/ to dist/pulp/)
+{
+  "name": "pulp-panic",
+  "compatibility_date": "2025-10-04",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  },
+  "routes": [
+    { "pattern": "buildatscale.tv/pulp*", "zone_name": "buildatscale.tv" }
+  ]
+}

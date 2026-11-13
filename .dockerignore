@@ -1,0 +1,6 @@
+dist
+sound-previews
+tools
+node_modules
+.wrangler
+**/.DS_Store
