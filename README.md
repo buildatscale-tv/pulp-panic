@@ -7,10 +7,24 @@ A juicy arcade fruit-slicing game that runs in any modern browser and plays grea
 [![License: MIT](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
 ![No dependencies](https://img.shields.io/badge/dependencies-0-brightgreen.svg)
 ![Platforms](https://img.shields.io/badge/plays%20on-desktop%20%7C%20iPad%20%7C%20phone-blue.svg)
+[![Built with Claude Code](https://img.shields.io/badge/built%20with-Claude%20Code-d97757.svg)](https://claude.com/product/claude-code)
 
 ![Arcade mode with a Frenzy power-up](docs/screenshots/gameplay.jpg)
 
 Everything you see and hear is generated in code: the fruit art, juice splats, backdrops, sound effects, and music. There are no image or audio assets, no frameworks, no build step, and zero dependencies. Plain HTML, CSS, and JavaScript modules on a Canvas 2D renderer with Web Audio.
+
+## Built entirely by AI
+
+Every line of this game was written by **[Claude Code](https://claude.com/product/claude-code)**, Anthropic's agentic coding tool, in a single session of about an hour and a half. It started from one prompt: build a full-featured fruit-slicing arcade game that is web native, plays on iPad, and shares live links early.
+
+From there, Claude Code:
+
+- designed and wrote the engine, the procedural fruit art, the synthesized sound effects and music, and all of the UI
+- shared a live preview link within minutes, then improved the game in steps based on feedback
+- tested full rounds automatically in Chromium and in WebKit (the iPad Safari engine) with simulated touch, and checked its own sound design with spectrograms, since it cannot listen
+- deployed the game to Fly.io and set up this repository, the README, and the screenshots
+
+The human part was direction and taste: what to build, how it should look and sound, the name, and the layout fixes.
 
 ## Screenshots
 
