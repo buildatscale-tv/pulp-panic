@@ -446,6 +446,45 @@ canvas#game {
 .item .fingers { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 999px; background: var(--cream-2); border: 2px solid var(--ink); font-size: 12px; font-weight: 800; }
 .chip.shield { background: #c9f7ff; padding-bottom: 6px; }
 
+/* First-tap gate and sound hint */
+.tap-gate {
+  pointer-events: auto;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px;
+  background: rgba(12, 6, 22, 0.55);
+  animation: fadein 0.25s ease-out;
+  z-index: 5;
+}
+.tap-gate .btn { font-size: 34px; padding: 18px 44px; box-shadow: 0 7px 0 var(--ink); animation: breathe-btn 1.4s ease-in-out infinite alternate; }
+.tap-gate p { margin: 0; font-weight: 800; font-size: 15px; color: var(--cream); text-shadow: var(--outline); }
+@keyframes breathe-btn { to { transform: scale(1.06); } }
+.sound-hint {
+  pointer-events: auto;
+  position: absolute;
+  left: calc(14px + var(--safe-l));
+  bottom: calc(14px + var(--safe-b));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 3px solid var(--ink);
+  background: var(--gold);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 16px;
+  box-shadow: 0 4px 0 var(--ink);
+  cursor: pointer;
+  z-index: 4;
+  animation: pop 0.3s cubic-bezier(.2, 1.5, .4, 1);
+}
+
 /* Toast */
 .toast {
   position: absolute;
@@ -533,5 +572,5 @@ canvas#game {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .logo span, .logo::after, .hint, .timer.urgent { animation: none; }
+  .logo span, .logo::after, .hint, .timer.urgent, .tap-gate .btn { animation: none; }
 }

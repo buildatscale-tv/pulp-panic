@@ -1402,6 +1402,13 @@ export class Game {
     this.flash = Math.max(0, this.flash - dt * 2.2);
 
     if (this.isPlaying()) this.ui.updateHud(this);
+    // Watch for the browser pausing sound (lock screen, app switch, no tap yet).
+    this.soundCheck = (this.soundCheck || 0) + dt;
+    if (this.soundCheck > 0.5) {
+      this.soundCheck = 0;
+      const wantSound = this.sfx.enabled || this.music.enabled;
+      this.ui.setSoundHint(wantSound && !!this.sfx.ctx && !this.sfx.running && !document.hidden);
+    }
     let bombs = 0;
     for (const f of this.fruits) if (f.alive && f.bomb && f.y < H + 20) bombs++;
     this.sfx.setFuse(this.state === 'boom' ? 0 : bombs);

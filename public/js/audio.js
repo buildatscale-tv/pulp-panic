@@ -35,11 +35,8 @@ export class Sfx {
       this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
       const d = this.noiseBuf.getChannelData(0);
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-      // Play one silent buffer so iOS fully unlocks output.
-      const s = this.ctx.createBufferSource();
-      s.buffer = this.ctx.createBuffer(1, 1, 22050);
-      s.connect(this.ctx.destination);
-      s.start(0);
+      this.silent = this.ctx.createBuffer(1, 1, 22050);
+      this.ctx.onstatechange = () => this.onState && this.onState(this.ctx.state);
       bakeAll()
         .then((b) => {
           this.baked = b;
@@ -47,7 +44,24 @@ export class Sfx {
         })
         .catch((e) => console.warn('Sound bake failed, using simple sounds', e));
     }
-    if (this.ctx.state === 'suspended') this.ctx.resume();
+    // Safari uses 'suspended' and also 'interrupted' (after a lock or app switch).
+    // Resume, and start a silent sound inside the gesture: iOS needs both to unlock output.
+    if (this.ctx.state !== 'running' && this.ctx.state !== 'closed') {
+      try {
+        const s = this.ctx.createBufferSource();
+        s.buffer = this.silent;
+        s.connect(this.ctx.destination);
+        s.start(0);
+      } catch {
+        // Ignore: resume() below still runs.
+      }
+      const p = this.ctx.resume();
+      if (p && p.catch) p.catch(() => {});
+    }
+  }
+
+  get running() {
+    return !!this.ctx && this.ctx.state === 'running';
   }
 
   get ok() {

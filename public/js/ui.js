@@ -27,6 +27,30 @@ export class UI {
 
   attach(game) {
     this.game = game;
+    const gate = $('#tapGate');
+    const s = this.store.data.settings;
+    // Show the first-tap screen only when some sound is on.
+    gate.hidden = !(s.sound || s.music);
+    const start = () => {
+      game.sfx.unlock();
+      game.music.start();
+      gate.hidden = true;
+      game.sfx.ui();
+    };
+    $('#tapGateBtn').addEventListener('click', start);
+    gate.addEventListener('click', (e) => { if (e.target === gate) start(); });
+    $('#soundHint').addEventListener('click', () => {
+      game.sfx.unlock();
+      game.music.start();
+      this.setSoundHint(false);
+    });
+  }
+
+  // Shown when sound is on in Settings but the browser has paused it.
+  setSoundHint(show) {
+    const el = $('#soundHint');
+    const want = show && $('#tapGate').hidden;
+    if (el.hidden === want) el.hidden = !want;
   }
 
   setScoreIcon(url) {

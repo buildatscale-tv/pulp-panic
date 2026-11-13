@@ -31,6 +31,20 @@ function boot() {
   ui.attach(game);
   ui.updateSeeds();
   window.__pulp = game;
+
+  // Any tap, click, or key anywhere tries to (re)start sound. Swipes alone do not
+  // count as a gesture on iPad Safari, so this catches every tap we can get.
+  const kick = () => {
+    game.sfx.unlock();
+    game.music.start();
+  };
+  for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'click', 'keydown']) {
+    window.addEventListener(ev, kick, { capture: true, passive: true });
+  }
+  game.sfx.onState = (state) => { if (state === 'running') game.ui.setSoundHint(false); };
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && game.sfx.ctx) game.sfx.unlock();
+  });
 }
 
 // Wait for the display font so canvas text uses it, but never block long.

@@ -30,7 +30,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=7">
+<link rel="stylesheet" href="css/style.css?v=8">
 </head>
 <body>
 <canvas id="game" aria-label="Game area. Swipe to slice."></canvas>
@@ -83,6 +83,17 @@
   </section>
 
   <div id="toast" class="toast" hidden><b></b><span></span></div>
+
+  <!-- First tap: browsers (iPad Safari above all) only start sound after a real tap. -->
+  <div id="tapGate" class="tap-gate" hidden>
+    <button class="btn primary" id="tapGateBtn">Tap to play</button>
+    <p>Sound is on. You can change it in Settings.</p>
+  </div>
+
+  <button id="soundHint" class="sound-hint" hidden aria-label="Sound is paused. Tap to turn it back on.">
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 9h4l5-4v14l-5-4H4z"/><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M16.5 9.5l5 5M21.5 9.5l-5 5"/></svg>
+    <span>Sound paused. Tap here.</span>
+  </button>
 
   <!-- Pause -->
   <section id="pause" class="screen modal" hidden>

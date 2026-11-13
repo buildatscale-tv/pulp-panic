@@ -1,5 +1,5 @@
 // Network first, cache as fallback: updates show at once, and the game still loads offline.
-const CACHE = 'pulp-panic-v4';
+const CACHE = 'pulp-panic-v5';
 const CORE = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest',
   'js/main.js', 'js/game.js', 'js/art.js', 'js/audio.js', 'js/modes.js', 'js/store.js', 'js/themes.js', 'js/ui.js', 'js/util.js', 'js/trophies.js', 'js/baked.js', 'js/progression.js', 'js/daily.js',
