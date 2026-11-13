@@ -37,20 +37,25 @@ export function drawTrail(ctx, pts, blade, now, unit) {
   };
   const tail = pts[0], head = pts[n - 1];
   if (blade.outer) {
-    ribbon(3.6);
+    ribbon(3.8);
     ctx.fillStyle = blade.outer;
     ctx.fill();
   }
-  ribbon(2.5);
+  let glow = blade.glow;
   if (blade.glow === 'hue') {
-    const g = ctx.createLinearGradient(tail.x, tail.y, head.x, head.y);
+    glow = ctx.createLinearGradient(tail.x, tail.y, head.x, head.y);
     const h0 = (now * 220) % 360;
-    for (let i = 0; i <= 4; i++) g.addColorStop(i / 4, `hsla(${(h0 + i * 70) % 360},100%,60%,0.75)`);
-    ctx.fillStyle = g;
-  } else {
-    ctx.fillStyle = blade.glow;
+    for (let i = 0; i <= 4; i++) glow.addColorStop(i / 4, `hsla(${(h0 + i * 70) % 360},100%,60%,0.75)`);
   }
-  ctx.fill();
+  // Soft glow in layers: wide and faint, then narrow and stronger.
+  const base = ctx.globalAlpha;
+  ctx.fillStyle = glow;
+  for (const [w, a] of [[3.4, 0.28], [2.3, 0.5], [1.6, 0.8]]) {
+    ctx.globalAlpha = base * a;
+    ribbon(w);
+    ctx.fill();
+  }
+  ctx.globalAlpha = base;
   ribbon(1);
   ctx.fillStyle = blade.core;
   ctx.fill();
