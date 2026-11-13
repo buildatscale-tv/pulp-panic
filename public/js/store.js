@@ -2,7 +2,7 @@
 const KEY = 'pulp-panic-v1';
 
 const defaults = () => ({
-  best: { arcade: 0, classic: 0, zen: 0 },
+  best: { arcade: 0, classic: 0, zen: 0, smoothie: 0, daily: 0 },
   seeds: 0,
   games: 0,
   fruits: 0,
@@ -14,6 +14,7 @@ const defaults = () => ({
   trophies: {},
   xp: 0,
   skills: {},
+  daily: null,
   tipDismissed: false,
 });
 

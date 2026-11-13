@@ -3,6 +3,7 @@ import { Art, FRUITS, NORMAL_FRUITS, POWER_COLORS, INK, snowflake } from './art.
 import { Sfx, Music } from './audio.js';
 import { TROPHIES, findTrophy, roundTrophies } from './trophies.js';
 import { computeMods, levelInfo, pointsAvailable } from './progression.js';
+import { dailyFor, dateKey, previousKey, DAILY_REWARD } from './daily.js';
 import { findBlade, findBackdrop, paintBackdrop, makeMotes, moteColor, BLADES, BACKDROPS } from './themes.js';
 import { MODES, Director, POWER_TIME } from './modes.js';
 import { TAU, rand, randInt, pick, clamp, lerp, segDist, easeOutBack, easeOutCubic } from './util.js';
@@ -79,6 +80,7 @@ export class Game {
     this.music = new Music(this.sfx);
     this.music.enabled = store.data.settings.music;
     this.mods = computeMods(store.data);
+    this.rules = {};
     this.lingers = [];
     this.shields = { bomb: 0, miss: 0 };
     this.fireTrail = { comboN: 0, comboTimer: 0 };
@@ -152,11 +154,32 @@ export class Game {
     this.canvas.style.height = h + 'px';
     this.minDim = Math.min(w, h);
     this.base = clamp(this.minDim * 0.062, 26, 64);
-    this.gravity = h * 1.5;
+    this.gravity = h * 1.5 * ((this.rules && this.rules.gravity) || 1);
     this.minSpeed = this.minDim * 0.45;
     this.art.build(this.base, dpr);
     this.applyBackdrop();
     this.layoutMenu();
+  }
+
+  // Fruit icon (data URL) for the smoothie order card, built once per type.
+  fruitIcon(type) {
+    if (!this.iconArt) {
+      this.iconArt = new Art();
+      this.iconArt.build(22, 2);
+      this.icons = {};
+    }
+    if (!this.icons[type]) {
+      const s = this.iconArt.sprites[type];
+      const c = document.createElement('canvas');
+      c.width = c.height = 72;
+      const ctx = c.getContext('2d');
+      const k = 60 / (Math.max(s.rx, s.ry) * 2.4);
+      ctx.translate(36, 38);
+      ctx.scale(k, k);
+      ctx.drawImage(s.skin, -s.size / 2, -s.size / 2, s.size, s.size);
+      this.icons[type] = c.toDataURL();
+    }
+    return this.icons[type];
   }
 
   // Small watermelon slice for the score display.
@@ -405,7 +428,10 @@ export class Game {
       this.activatePower(def.power, f.x, f.y);
     }
 
-    if (f.golden) {
+    if (this.mode.id === 'smoothie' && this.order) {
+      if (f.golden) this.stats.goldSeeds++;
+      this.smoothieSlice(f, s);
+    } else if (f.golden) {
       this.stats.goldSeeds++;
       this.addScore(3, f.x, f.y - s.ry, 'GOLD', 0.9, '#ffe36b');
       this.sfx.core();
@@ -439,7 +465,7 @@ export class Game {
       if (lvl > this.blitzLevel) {
         this.blitzLevel = lvl;
         this.stats.blitzMax = Math.max(this.stats.blitzMax, lvl);
-        this.addScore(lvl * 2 + 1, this.W / 2, this.H * 0.28, `BLITZ x${lvl}`, 1.3, '#ffe36b');
+        this.addScore((lvl * 2 + 1) * (this.rules.blitzMul || 1), this.W / 2, this.H * 0.28, `BLITZ x${lvl}`, 1.3, '#ffe36b');
         this.sfx.blitz();
         if (lvl >= 3) this.award('blitz3');
       }
@@ -608,6 +634,136 @@ export class Game {
     return t;
   }
 
+  // Which fruit to throw next: the smoothie order is favored; daily rules can limit the pool.
+  pickFruit() {
+    if (this.mode.id === 'smoothie' && this.order) {
+      const need = this.order.items.filter((it) => it.got < it.n).map((it) => it.type);
+      if (need.length && Math.random() < 0.55) return pick(need);
+    }
+    if (this.rules.pool) return pick(this.rules.pool);
+    return pick(NORMAL_FRUITS);
+  }
+
+  // ---------- Smoothie Rush ----------
+  newOrder() {
+    const idx = this.orderIndex;
+    const total = Math.min(10, 4 + idx);
+    const typesN = idx === 0 ? 2 : Math.min(3, 2 + Math.floor(idx / 2));
+    const pool = [...NORMAL_FRUITS].sort(() => Math.random() - 0.5).slice(0, typesN);
+    const items = pool.map((type) => ({ type, n: 1, got: 0 }));
+    for (let i = typesN; i < total; i++) items[Math.floor(Math.random() * typesN)].n++;
+    this.order = { items, total, started: this.realT, num: idx + 1 };
+    this.cup = [];
+    this.ui.updateOrder(this.order, true);
+  }
+
+  smoothieSlice(f, s) {
+    const it = this.order.items.find((i) => i.type === f.type && i.got < i.n);
+    if (it) {
+      it.got++;
+      this.cup.push({ type: f.type, color: FRUITS[f.type].juice });
+      this.addScore(f.golden ? 5 : 2, f.x, f.y - s.ry, null, 0.85, '#c9ffb8');
+      if (this.order.items.every((i) => i.got >= i.n)) this.completeOrder();
+      else this.ui.updateOrder(this.order);
+      return;
+    }
+    // Wrong fruit: lose points and spoil the last layer in the cup.
+    this.stats.spoiled++;
+    const loss = Math.min(2, this.score);
+    this.score -= loss;
+    this.popup(loss ? `YUCK -${loss}` : 'YUCK', f.x, f.y - s.ry, 1, '#ff7a7a');
+    const last = this.cup.pop();
+    if (last) {
+      const li = this.order.items.find((i) => i.type === last.type);
+      if (li && li.got > 0) li.got--;
+    }
+    this.cupShake = 0.4;
+    this.sfx.strike();
+    this.ui.updateOrder(this.order);
+  }
+
+  completeOrder() {
+    const o = this.order;
+    const fast = this.realT - o.started < 5 + o.total * 1.1;
+    this.addScore(8 + this.orderIndex * 4, this.W / 2, this.H * 0.32, `ORDER ${o.num} UP`, 1.4, '#ffe36b');
+    if (fast) this.addScore(5, this.W / 2, this.H * 0.32 + this.base * 1.3, 'FAST', 1, '#7dff8a');
+    this.stats.orders++;
+    this.sfx.combo(5);
+    const c = this.cupGeom();
+    for (let i = 0; i < 40; i++) {
+      const a = -Math.PI / 2 + rand(-1, 1);
+      const sp = rand(3, 10) * this.base;
+      this.addParticle({ x: c.x, y: c.top, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: rand(0.06, 0.14) * this.base, color: pick(o.items.map((i) => FRUITS[i.type].juice)), life: rand(0.6, 1), g: 1 });
+    }
+    this.cupFlash = 0.7;
+    this.orderIndex++;
+    this.newOrder();
+  }
+
+  cupGeom() {
+    const b = this.base;
+    const h = b * 3.4, wTop = b * 2.5, wBot = b * 1.9;
+    const x = this.W - wTop / 2 - b * 0.8;
+    const bottom = this.H - b * 0.8;
+    return { x, bottom, top: bottom - h, h, wTop, wBot };
+  }
+
+  drawCup() {
+    const ctx = this.ctx;
+    const c = this.cupGeom();
+    const shake = this.cupShake > 0 ? Math.sin(this.realT * 60) * this.base * 0.12 * (this.cupShake / 0.4) : 0;
+    ctx.save();
+    ctx.translate(shake, 0);
+    const path = () => {
+      ctx.beginPath();
+      ctx.moveTo(c.x - c.wTop / 2, c.top);
+      ctx.lineTo(c.x + c.wTop / 2, c.top);
+      ctx.lineTo(c.x + c.wBot / 2, c.bottom);
+      ctx.lineTo(c.x - c.wBot / 2, c.bottom);
+      ctx.closePath();
+    };
+    if (this.cupFlash > 0) {
+      const g = ctx.createRadialGradient(c.x, c.top + c.h / 2, 0, c.x, c.top + c.h / 2, c.h);
+      g.addColorStop(0, `rgba(255,230,120,${0.5 * this.cupFlash})`);
+      g.addColorStop(1, 'rgba(255,230,120,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(c.x - c.h, c.top - c.h / 2, c.h * 2, c.h * 2);
+    }
+    path();
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fill();
+    ctx.save();
+    path();
+    ctx.clip();
+    const total = this.order ? this.order.total : 1;
+    const layerH = (c.h * 0.92) / total;
+    this.cup.forEach((l, i) => {
+      const y = c.bottom - (i + 1) * layerH;
+      ctx.fillStyle = l.color;
+      ctx.fillRect(c.x - c.wTop, y, c.wTop * 2, layerH + 1);
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fillRect(c.x - c.wTop, y, c.wTop * 2, Math.max(1, layerH * 0.18));
+    });
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.fillRect(c.x - c.wTop / 2 + c.wTop * 0.12, c.top, c.wTop * 0.1, c.h);
+    ctx.restore();
+    path();
+    ctx.lineWidth = Math.max(2, this.base * 0.09);
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    // Straw.
+    ctx.strokeStyle = '#ff4f8b';
+    ctx.lineWidth = this.base * 0.16;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(c.x + c.wTop * 0.18, c.bottom - c.h * 0.3);
+    ctx.lineTo(c.x + c.wTop * 0.36, c.top - this.base * 0.7);
+    ctx.lineTo(c.x + c.wTop * 0.62, c.top - this.base * 0.95);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // Wildfire perk: set the nearest uncut fruit on fire; it bursts a moment later.
   igniteNear(from) {
     let best = null, bestD = this.base * 9;
@@ -721,7 +877,8 @@ export class Game {
       alive: true, bomb: !!def.bomb, power: def.power || null, side: !!spec.side,
       born: this.realT, gourd: false,
     };
-    if (this.mods.perk === 'midas' && !f.bomb && !f.power && spec.type !== 'gourd' && this.state === 'play' && Math.random() < 0.12) f.golden = true;
+    const goldChance = Math.max(this.rules.golden || 0, this.mods.perk === 'midas' ? 0.12 : 0);
+    if (goldChance && !f.bomb && !f.power && spec.type !== 'gourd' && this.state === 'play' && Math.random() < goldChance) f.golden = true;
     this.fruits.push(f);
     if (!f.bomb && !f.side && spec.type !== 'gourd') this.stats.launched++;
     if (!f.side || Math.random() < 0.3) this.sfx.launch();
@@ -787,6 +944,9 @@ export class Game {
   toMenu() {
     if (this.paused) this.music.duck(false);
     this.refreshMods();
+    this.rules = {};
+    this.daily = null;
+    this.gravity = this.H * 1.5;
     this.paused = false;
     this.state = 'menu';
     this.clearWorld(true);
@@ -886,6 +1046,12 @@ export class Game {
   start(modeId) {
     if (this.paused) this.music.duck(false);
     this.mode = MODES[modeId];
+    this.daily = modeId === 'daily' ? dailyFor(dateKey()) : null;
+    this.rules = this.daily ? this.daily.rules : {};
+    this.gravity = this.H * 1.5 * (this.rules.gravity || 1);
+    this.readyLine = this.daily
+      ? `${this.daily.mods.map((m) => m.name).join(' + ')}. Goal: ${this.daily.target}`
+      : this.mode.tagline;
     this.clearWorld(true);
     this.paused = false;
     this.director = new Director(this, this.mode);
@@ -906,12 +1072,18 @@ export class Game {
     this.endReason = null;
     this.gourdLaunched = false;
     this.roundSeedsStart = this.store.data.seeds;
-    this.stats = { goldSeeds: 0, fireBursts: 0, bullseyes: 0, sliced: 0, slicedThrown: 0, launched: 0, combos: 0, maxCombo: 0, bombs: 0, missed: 0, blitzMax: 0, gourd: 0, powers: new Set() };
+    this.order = null;
+    this.cup = [];
+    this.orderIndex = 0;
+    this.cupFlash = 0;
+    this.cupShake = 0;
+    this.stats = { orders: 0, spoiled: 0, goldSeeds: 0, fireBursts: 0, bullseyes: 0, sliced: 0, slicedThrown: 0, launched: 0, combos: 0, maxCombo: 0, bombs: 0, missed: 0, blitzMax: 0, gourd: 0, powers: new Set() };
     this.state = 'ready';
     this.readyT = 0;
     this.trails.clear();
     for (const m of this.menuItems) m.alive = true;
     this.ui.showHud(this.mode, this.store.data.best[modeId]);
+    if (modeId === 'smoothie') this.newOrder();
     this.sfx.ready();
   }
 
@@ -970,7 +1142,7 @@ export class Game {
     const mode = this.mode;
     const bonuses = [];
     const acc = st.launched ? Math.min(1, st.slicedThrown / st.launched) : 0;
-    if (mode.id === 'arcade') {
+    if ((mode.base || mode.id) === 'arcade') {
       if (st.bombs === 0) bonuses.push({ label: 'Bomb Dodger', pts: 25 });
       if (st.combos >= 3) bonuses.push({ label: `Combo Crafter (${st.combos})`, pts: Math.min(40, st.combos * 2) });
       if (acc >= 0.9 && st.launched >= 25) bonuses.push({ label: 'Sharp Eye', pts: 20 });
@@ -988,7 +1160,23 @@ export class Game {
     const newBest = total > prevBest;
     if (newBest) d.best[mode.id] = total;
     const seedsBefore = this.roundSeedsStart ?? d.seeds;
-    const seeds = Math.round((Math.floor(total / 10) + (newBest && total > 0 ? 5 : 0) + st.goldSeeds) * this.mods.seedMul);
+    let daily = null;
+    if (this.daily) {
+      const key = this.daily.key;
+      const ds = d.daily && d.daily.key === key ? d.daily : { key, best: 0, done: false, streak: (d.daily && d.daily.streak) || 0, lastDone: d.daily && d.daily.lastDone };
+      ds.best = Math.max(ds.best, total);
+      const reached = total >= this.daily.target;
+      let reward = 0;
+      if (reached && !ds.done) {
+        ds.done = true;
+        ds.streak = ds.lastDone === previousKey(key) ? (ds.streak || 0) + 1 : 1;
+        ds.lastDone = key;
+        reward = DAILY_REWARD + Math.min(100, (ds.streak - 1) * 10);
+      }
+      d.daily = ds;
+      daily = { target: this.daily.target, reached, reward, streak: ds.streak, done: ds.done };
+    }
+    const seeds = Math.round((Math.floor(total / 10) + (newBest && total > 0 ? 5 : 0) + st.goldSeeds) * this.mods.seedMul) + (daily ? daily.reward : 0);
     d.seeds += seeds;
     const levelBefore = levelInfo(d.xp || 0);
     d.xp = (d.xp || 0) + total;
@@ -997,7 +1185,7 @@ export class Game {
     d.fruits += st.sliced;
     d.bestCombo = Math.max(d.bestCombo, st.maxCombo);
     const trophies = [];
-    for (const id of roundTrophies({ mode: mode.id, bombs: st.bombs, total }, d)) {
+    for (const id of roundTrophies({ mode: mode.id, bombs: st.bombs, total, orders: st.orders, dailyDone: daily && daily.reached }, d)) {
       const t = this.award(id, true);
       if (t) trophies.push(t);
     }
@@ -1016,7 +1204,7 @@ export class Game {
       mode, reason: this.endReason, base, total, bonuses, newBest, best: Math.max(prevBest, total),
       sliced: st.sliced, accuracy: acc, maxCombo: st.maxCombo, combos: st.combos, bombs: st.bombs,
       gourd: st.gourd, seeds, totalSeeds: d.seeds, unlocked, trophies,
-      xpGain: total, levelBefore, levelAfter, points: pointsAvailable(d),
+      xpGain: total, levelBefore, levelAfter, points: pointsAvailable(d), orders: st.orders, spoiled: st.spoiled, daily,
     });
   }
 
@@ -1207,6 +1395,8 @@ export class Game {
       if (this.banner.t > this.banner.dur) this.banner = null;
     }
 
+    if (this.cupFlash > 0) this.cupFlash = Math.max(0, this.cupFlash - dt);
+    if (this.cupShake > 0) this.cupShake = Math.max(0, this.cupShake - dt);
     this.shake *= Math.exp(-dt * 9);
     if (this.shake < 0.3) this.shake = 0;
     this.flash = Math.max(0, this.flash - dt * 2.2);
@@ -1287,6 +1477,8 @@ export class Game {
       ctx.restore();
     }
     ctx.globalAlpha = 1;
+
+    if (this.mode.id === 'smoothie' && this.order && this.state !== 'menu') this.drawCup();
 
     for (const h of this.halves) this.drawHalf(h);
 
@@ -1721,7 +1913,7 @@ export class Game {
     if (t < 0.85) {
       const k = easeOutBack(Math.min(1, t / 0.3));
       this.text('READY?', W / 2, H * 0.42, this.base * 1.4 * k, '#fff1de');
-      this.text(this.mode.tagline, W / 2, H * 0.42 + this.base * 1.5, this.base * 0.42, 'rgba(255,241,222,0.85)', Math.min(1, t * 3));
+      this.text(this.readyLine || this.mode.tagline, W / 2, H * 0.42 + this.base * 1.5, this.base * 0.42, 'rgba(255,241,222,0.85)', Math.min(1, t * 3));
     } else {
       const u = (t - 0.85) / 0.65;
       if (u < 0.05 && !this.goPlayed) {

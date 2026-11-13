@@ -4,6 +4,7 @@ import { MODES } from './modes.js';
 import { drawTrail } from './game.js';
 import { TROPHIES } from './trophies.js';
 import { SKILLS, levelInfo, pointsAvailable, skillRank } from './progression.js';
+import { dailyFor, dateKey, DAILY_REWARD } from './daily.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -15,7 +16,7 @@ export class UI {
       hud: $('#hud'), score: $('#score'), best: $('#best'), timer: $('#timer'), strikes: $('#strikes'),
       menu: $('#menu'), menuSeeds: $('#menuSeeds'), pause: $('#pause'), results: $('#results'),
       collection: $('#collection'), settings: $('#settings'), howto: $('#howto'), colGrid: $('#colGrid'),
-      skills: $('#skills'),
+      skills: $('#skills'), games: $('#games'), order: $('#order'),
     };
     this.chips = {};
     document.querySelectorAll('.chip').forEach((c) => (this.chips[c.dataset.power] = { el: c, bar: c.querySelector('i') }));
@@ -43,6 +44,7 @@ export class UI {
       const act = btn.dataset.act;
       if (act === 'collection') this.openCollection();
       else if (act === 'skills') this.openSkills();
+      else if (act === 'games') this.openGames();
       else if (act === 'howto') this.open('howto');
       else if (act === 'settings') this.openSettings();
       else if (act === 'fullscreen') this.toggleFullscreen();
@@ -72,7 +74,7 @@ export class UI {
     // Close a modal when its dark backdrop is tapped.
     document.querySelectorAll('.modal').forEach((m) =>
       m.addEventListener('pointerdown', (e) => {
-        if (e.target === m && ['collection', 'settings', 'howto', 'skills'].includes(m.id)) this.closeModals();
+        if (e.target === m && ['collection', 'settings', 'howto', 'skills', 'games'].includes(m.id)) this.closeModals();
       }),
     );
 
@@ -176,7 +178,7 @@ export class UI {
   }
 
   closeModals() {
-    for (const id of ['collection', 'settings', 'howto', 'skills']) this.el[id].hidden = true;
+    for (const id of ['collection', 'settings', 'howto', 'skills', 'games']) this.el[id].hidden = true;
     this.updateSeeds();
   }
 
@@ -189,6 +191,66 @@ export class UI {
     const badge = $('#skillsBadge');
     badge.hidden = pts === 0;
     badge.textContent = pts;
+    // "!" on Mini games while today's daily goal is open.
+    const dailyOpen = lv.level >= MODES.daily.unlock && !(d.daily && d.daily.key === dateKey() && d.daily.done);
+    $('#gamesBadge').hidden = !dailyOpen;
+  }
+
+  openGames() {
+    this.open('games');
+    this.renderGames();
+  }
+
+  renderGames() {
+    const d = this.store.data;
+    const level = levelInfo(d.xp || 0).level;
+    const grid = $('#gamesGrid');
+    grid.innerHTML = '';
+    const card = (mode, body) => {
+      const locked = level < mode.unlock;
+      const el = document.createElement('div');
+      el.className = 'game-card' + (locked ? ' locked' : '');
+      el.innerHTML = `<h3></h3>${body}`;
+      el.querySelector('h3').textContent = mode.name;
+      const btn = document.createElement('button');
+      btn.className = 'btn primary';
+      btn.textContent = locked ? `Unlocks at level ${mode.unlock}` : 'Play';
+      btn.disabled = locked;
+      btn.addEventListener('click', () => {
+        if (locked || !this.game) return;
+        this.closeModals();
+        this.game.start(mode.id);
+      });
+      el.appendChild(btn);
+      grid.appendChild(el);
+    };
+    card(MODES.smoothie, `<p class="gd">A customer orders a smoothie. Cut only the fruit in the order to fill the blender cup. A wrong fruit costs points and spoils the last layer. Fast orders pay extra.</p>`
+      + `<div class="gm"><span class="tag">75 seconds</span><span class="tag">No bombs</span><span class="tag">Best ${d.best.smoothie || 0}</span></div>`);
+    const today = dailyFor(dateKey());
+    const ds = d.daily && d.daily.key === today.key ? d.daily : null;
+    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const streak = d.daily ? d.daily.streak || 0 : 0;
+    card(MODES.daily, `<p class="gd">Arcade rules with two twists that change every day. Reach the goal for ${DAILY_REWARD} seeds, plus a streak bonus for each day in a row.</p>`
+      + today.mods.map((m) => `<div class="rule"><b>${esc(m.name)}</b>${esc(m.desc)}</div>`).join('')
+      + `<div class="gm"><span class="tag">Goal ${today.target}</span><span class="tag">Today's best ${ds ? ds.best : 0}</span>`
+      + `<span class="tag">Streak ${streak}</span>${ds && ds.done ? '<span class="tag good">Goal reached</span>' : ''}</div>`);
+  }
+
+  // Smoothie order card in the HUD.
+  updateOrder(order, fresh = false) {
+    const el = this.el.order;
+    if (!order || !this.game) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    el.innerHTML = `<span class="on">ORDER ${order.num}</span>` + order.items.map((it) =>
+      `<span class="oi${it.got >= it.n ? ' done' : ''}"><img alt="${it.type}" src="${this.game.fruitIcon(it.type)}"><b>${it.got}/${it.n}</b></span>`).join('');
+    if (fresh) {
+      el.classList.remove('fresh');
+      void el.offsetWidth;
+      el.classList.add('fresh');
+    }
   }
 
   openSkills() {
@@ -257,6 +319,7 @@ export class UI {
     this.el.timer.hidden = !mode.time;
     this.el.strikes.hidden = !mode.strikes;
     this.shown = { score: -1, time: -1, strikes: -1, urgent: null, frozen: null, shield: null };
+    this.el.order.hidden = true;
     for (const c of Object.values(this.chips)) c.el.hidden = true;
     $('#shieldChip').hidden = true;
   }
@@ -328,6 +391,19 @@ export class UI {
       [r.mode.id === 'arcade' ? 'Gourd hits' : r.mode.id === 'classic' ? 'Bombs' : 'Combos', r.mode.id === 'arcade' ? r.gourd : r.mode.id === 'classic' ? r.bombs : r.combos],
     ];
     if (r.mode.id !== 'classic') stats[1] = ['Accuracy', `${pct}%`];
+    if (r.mode.id === 'smoothie') {
+      stats[0] = ['Orders', r.orders];
+      stats[1] = ['Sliced', r.sliced];
+      stats[2] = ['Spoiled', r.spoiled];
+    }
+    const dl = $('#resDaily');
+    dl.hidden = !r.daily;
+    if (r.daily) {
+      dl.classList.toggle('win', r.daily.reached);
+      dl.textContent = r.daily.reached
+        ? (r.daily.reward ? `Daily goal reached! +${r.daily.reward} seeds. Streak: ${r.daily.streak} day${r.daily.streak > 1 ? 's' : ''}.` : `Daily goal reached again. Streak: ${r.daily.streak}.`)
+        : `Daily goal: ${r.daily.target}. You scored ${r.total}. Try again!`;
+    }
     $('#resStats').innerHTML = stats.map(([k, v]) => `<div>${k}<b>${v}</b></div>`).join('');
     $('#resSeeds').textContent = `+${r.seeds} seeds (total ${r.totalSeeds})`;
     const un = $('#resUnlock');

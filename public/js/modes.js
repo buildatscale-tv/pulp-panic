@@ -1,5 +1,4 @@
 // Mode rules and the wave director that decides what to throw and when.
-import { NORMAL_FRUITS } from './art.js';
 import { rand, randInt, pick, clamp, lerp, weightedPick } from './util.js';
 
 export const MODES = {
@@ -18,6 +17,17 @@ export const MODES = {
     strikes: false, finale: false, blitz: true, fruit: 'peach',
     tagline: '90 calm seconds with no bombs',
   },
+  // Mini games.
+  smoothie: {
+    id: 'smoothie', name: 'Smoothie Rush', time: 75, bombs: false, bombEndsGame: false, powerups: false,
+    strikes: false, finale: false, blitz: false, fruit: 'orange', mini: true, unlock: 3,
+    tagline: 'Cut only the fruit in the order. Wrong fruit spoils the cup',
+  },
+  daily: {
+    id: 'daily', base: 'arcade', name: 'Daily Challenge', time: 60, bombs: true, bombEndsGame: false, powerups: true,
+    strikes: false, finale: true, blitz: true, fruit: 'gold', mini: true, unlock: 2,
+    tagline: 'New rules every day',
+  },
 };
 
 export const POWER_FRUIT = { frost: 'frost', frenzy: 'blaze', double: 'gold' };
@@ -31,22 +41,26 @@ export class Director {
     this.waves = 0;
     this.nextWave = 0.35;
     this.queue = [];
-    this.nextPower = mode.powerups ? rand(4.5, 7) / game.mods.powerFreq : Infinity;
+    this.kind = mode.base || mode.id;
+    this.rules = game.rules || {};
+    this.powerFreq = game.mods.powerFreq * (this.rules.powerMul || 1);
+    this.nextPower = mode.powerups ? rand(4.5, 7) / this.powerFreq : Infinity;
     this.lastPower = null;
     this.frenzyNext = 0;
   }
 
   progress() {
-    if (this.mode.id === 'classic') return clamp(this.t / 170 + this.game.score / 650, 0, 1);
+    if (this.kind === 'classic') return clamp(this.t / 170 + this.game.score / 650, 0, 1);
     return clamp(this.t / this.mode.time, 0, 1);
   }
 
   interval(p) {
     let base;
-    if (this.mode.id === 'classic') base = lerp(1.95, 1.0, p);
-    else if (this.mode.id === 'arcade') base = lerp(1.4, 0.72, p);
+    if (this.kind === 'classic') base = lerp(1.95, 1.0, p);
+    else if (this.kind === 'arcade') base = lerp(1.4, 0.72, p);
+    else if (this.kind === 'smoothie') base = lerp(1.05, 0.75, p);
     else base = lerp(1.15, 0.7, p);
-    return base * rand(0.85, 1.15);
+    return base * rand(0.85, 1.15) * (this.rules.intervalMul || 1);
   }
 
   update(dt) {
@@ -66,7 +80,7 @@ export class Director {
       this.frenzyNext -= dt;
       if (this.frenzyNext <= 0) {
         this.frenzyNext = rand(0.08, 0.15);
-        g.launch(g.sideLaunch(pick(NORMAL_FRUITS)));
+        g.launch(g.sideLaunch(g.pickFruit()));
       }
       return;
     }
@@ -80,7 +94,7 @@ export class Director {
     this.nextPower -= dt;
     if (this.nextPower <= 0) {
       if (g.timeLeft > 5) this.power();
-      this.nextPower = rand(7, 11) / g.mods.powerFreq;
+      this.nextPower = rand(7, 11) / this.powerFreq;
     }
   }
 
@@ -96,21 +110,25 @@ export class Director {
   wave() {
     const g = this.game, p = this.progress(), m = this.mode;
     this.waves++;
+    const k = this.kind;
     let maxN;
-    if (m.id === 'zen') maxN = 3 + Math.round(p * 4);
-    else if (m.id === 'arcade') maxN = 2 + Math.round(p * 4);
+    if (k === 'zen') maxN = 3 + Math.round(p * 4);
+    else if (k === 'smoothie') maxN = 2 + Math.round(p * 3);
+    else if (k === 'arcade') maxN = 2 + Math.round(p * 4);
     else maxN = 1 + Math.round(p * 4);
+    maxN = Math.round(maxN * (this.rules.waveMul || 1));
     let n = randInt(Math.max(1, Math.ceil(maxN * 0.45)), maxN);
-    if (m.id === 'classic' && this.waves <= 3) n = Math.min(n, this.waves);
+    if (k === 'classic' && this.waves <= 3) n = Math.min(n, this.waves);
 
     let bombs = 0;
-    if (m.bombs && this.waves > 2) {
-      const chance = m.id === 'arcade' ? lerp(0.3, 0.6, p) : lerp(0.12, 0.5, p);
-      if (Math.random() < chance) bombs = p > 0.55 && Math.random() < 0.3 ? 2 : 1;
+    const bombMul = this.rules.bombMul ?? 1;
+    if (m.bombs && this.waves > 2 && bombMul > 0) {
+      const chance = (k === 'arcade' ? lerp(0.3, 0.6, p) : lerp(0.12, 0.5, p)) * bombMul;
+      if (Math.random() < Math.min(0.95, chance)) bombs = (p > 0.55 || bombMul > 1) && Math.random() < 0.3 * bombMul ? 2 : 1;
     }
 
     const kinds = [];
-    for (let i = 0; i < n; i++) kinds.push(pick(NORMAL_FRUITS));
+    for (let i = 0; i < n; i++) kinds.push(g.pickFruit());
     for (let b = 0; b < bombs; b++) kinds.splice(randInt(0, kinds.length), 0, 'bomb');
 
     const total = kinds.length;

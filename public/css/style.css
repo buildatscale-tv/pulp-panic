@@ -410,6 +410,32 @@ canvas#game {
 .skill .btn { align-self: flex-start; font-size: 15px; padding: 6px 14px; box-shadow: 0 3px 0 var(--ink); }
 .skill .btn:disabled { opacity: 0.45; cursor: default; transform: none; }
 
+/* Smoothie order card (HUD) */
+.order { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 12px; border: 3px solid var(--ink); border-radius: 16px; background: var(--cream); color: var(--ink); box-shadow: 0 4px 0 var(--ink); }
+.order .on { font-family: var(--font-display); font-size: 15px; line-height: 1; white-space: nowrap; }
+.order .oi { display: flex; align-items: center; gap: 2px; padding: 2px 6px 2px 2px; border-radius: 12px; background: #fff; border: 2px solid var(--ink); }
+.order .oi img { width: 30px; height: 30px; }
+.order .oi b { font-family: var(--font-display); font-weight: 400; font-size: 17px; font-variant-numeric: tabular-nums; }
+.order .oi.done { background: #c9f7d0; }
+.order.fresh { animation: pop 0.35s cubic-bezier(.2, 1.5, .4, 1); }
+
+/* Mini games */
+.games-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
+.game-card { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 3px solid var(--ink); border-radius: 18px; background: #fff; box-shadow: 0 5px 0 var(--ink); }
+.game-card h3 { margin: 0; }
+.game-card .gd { font-size: 14px; line-height: 1.4; margin: 0; }
+.game-card .gm { display: flex; flex-wrap: wrap; gap: 6px; }
+.game-card .tag { padding: 3px 10px; border-radius: 999px; border: 2px solid var(--ink); background: var(--cream-2); font-size: 12px; font-weight: 800; }
+.game-card .tag.good { background: #c9f7d0; }
+.game-card .rule { padding: 6px 10px; border-radius: 12px; background: var(--cream); border: 2px dashed rgba(42, 21, 51, 0.35); font-size: 13px; }
+.game-card .rule b { display: block; font-family: var(--font-display); font-weight: 400; font-size: 16px; }
+.game-card .btn { align-self: flex-start; margin-top: 4px; }
+.game-card.locked { opacity: 0.6; }
+
+/* Results: daily */
+.res-daily { margin-top: 10px; padding: 8px 10px; border-radius: 12px; border: 2px solid var(--ink); font-weight: 800; background: var(--cream-2); }
+.res-daily.win { background: #c9f7d0; }
+
 /* Results XP */
 .res-xp { margin-top: 12px; text-align: left; }
 .res-xp .lv-row b { font-size: 18px; }
@@ -486,10 +512,16 @@ canvas#game {
   .tip { font-size: 12px; }
   .long { display: none; }
   .short { display: inline; }
+  .order .oi img { width: 24px; height: 24px; }
+  .order .on { display: none; }
   .hud { padding-left: calc(10px + var(--safe-l)); padding-right: calc(10px + var(--safe-r)); }
   .timer { min-width: 64px; font-size: 26px; padding: 4px 10px 6px; }
   .chip { min-width: 110px; font-size: 13px; }
   .icon-btn { width: 40px; height: 40px; }
+}
+
+@media (max-width: 480px) {
+  #fsBtn { display: none; }
 }
 
 @media (max-height: 520px) {

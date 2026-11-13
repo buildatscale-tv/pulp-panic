@@ -30,7 +30,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=6">
+<link rel="stylesheet" href="css/style.css?v=7">
 </head>
 <body>
 <canvas id="game" aria-label="Game area. Swipe to slice."></canvas>
@@ -43,6 +43,7 @@
       <div id="best" class="best">BEST 0</div>
     </div>
     <div id="powers" class="powers">
+      <div id="order" class="order" hidden></div>
       <div class="chip" data-power="frost" hidden><span>FREEZE</span><i></i></div>
       <div class="chip" data-power="frenzy" hidden><span>FRENZY</span><i></i></div>
       <div class="chip" data-power="double" hidden><span>DOUBLE ×2</span><i></i></div>
@@ -69,6 +70,7 @@
     <div class="grow"></div>
     <nav class="menu-bar">
       <button class="btn small primary" data-act="skills" id="skillsBtn">Skills<b class="badge" id="skillsBadge" hidden></b></button>
+      <button class="btn small" data-act="games" id="gamesBtn"><span class="long">Mini games</span><span class="short">Games</span><b class="badge" id="gamesBadge" hidden>!</b></button>
       <button class="btn small" data-act="collection"><span class="long">Collection</span><span class="short">Blades</span></button>
       <button class="btn small" data-act="howto"><span class="long">How to play</span><span class="short">Help</span></button>
       <button class="btn small icon" data-act="settings" aria-label="Settings" title="Settings">
@@ -104,6 +106,7 @@
       <ul id="resBonus" class="res-bonus"></ul>
       <div id="resStats" class="res-stats"></div>
       <div id="resSeeds" class="res-seeds"></div>
+      <div id="resDaily" class="res-daily" hidden></div>
       <div id="resXp" class="res-xp"></div>
       <div id="resUnlock" class="res-unlock" hidden></div>
       <div id="resTrophy" class="res-trophy" hidden></div>
@@ -128,6 +131,17 @@
         <button class="tab" data-tab="trophies">Trophies</button>
       </div>
       <div id="colGrid" class="grid"></div>
+    </div>
+  </section>
+
+  <!-- Mini games -->
+  <section id="games" class="screen modal" hidden>
+    <div class="card wide">
+      <div class="card-head">
+        <h2>Mini games</h2>
+        <button class="icon-btn close" data-act="close" aria-label="Close">✕</button>
+      </div>
+      <div id="gamesGrid" class="games-grid"></div>
     </div>
   </section>
 
