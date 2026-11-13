@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/style.css?v=4">
 </head>
 <body>
 <canvas id="game" aria-label="Game area. Swipe to slice."></canvas>
@@ -112,7 +112,7 @@
 
   <!-- Settings -->
   <section id="settings" class="screen modal" hidden>
-    <div class="card narrow">
+    <div class="card settings">
       <div class="card-head">
         <h2>Settings</h2>
         <button class="icon-btn close" data-act="close" aria-label="Close">✕</button>
@@ -121,8 +121,17 @@
       <label class="toggle"><input type="checkbox" id="setMusic"><span>Music</span></label>
       <label class="toggle"><input type="checkbox" id="setShake"><span>Screen shake</span></label>
       <label class="toggle"><input type="checkbox" id="setMouse"><span>Mouse: hold button to slice</span></label>
+      <section class="stats" aria-labelledby="statsTitle">
+        <h3 id="statsTitle">Your stats</h3>
+        <div class="kpis" id="statKpis"></div>
+        <h4>Best scores</h4>
+        <p class="cap">Each bar fills toward the next trophy score for that mode.</p>
+        <div class="meters" id="statBest"></div>
+        <h4>Progress</h4>
+        <div class="meters" id="statProgress"></div>
+        <p class="next" id="statNext"></p>
+      </section>
       <button class="btn danger" id="resetBtn">Reset progress</button>
-      <p class="sub" id="statsLine"></p>
     </div>
   </section>
 

@@ -338,6 +338,25 @@ canvas#game {
 .item.locked .st { color: #b0204a; opacity: 1; }
 
 /* Settings */
+.card.settings { width: min(440px, 100%); text-align: left; }
+.card.settings .btn.danger { display: block; margin: 18px auto 0; }
+
+/* Stats: KPI tiles + meter lists */
+.stats { margin-top: 12px; padding-top: 14px; border-top: 2px dashed rgba(42, 21, 51, 0.25); }
+.stats h3 { margin: 0 0 10px; }
+.stats h4 { margin: 16px 0 4px; font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; opacity: 0.7; }
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kpi { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; background: #fff; border: 2px solid var(--ink); border-radius: 14px; }
+.kpi .kl { font-size: 12px; font-weight: 800; opacity: 0.7; }
+.kpi .kv { font-family: var(--font-display); font-size: 28px; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.cap { margin: 0 0 8px; font-size: 12px; opacity: 0.7; }
+.meters { display: grid; gap: 9px; }
+.meter-row { display: grid; grid-template-columns: 70px 1fr auto; align-items: center; gap: 10px; font-size: 14px; font-weight: 800; }
+.meter-row .mb { position: relative; height: 10px; border-radius: 999px; background: #f7d9b5; overflow: hidden; }
+.meter-row .mb i { display: block; height: 100%; border-radius: 999px; background: #cf6a08; }
+.meter-row .mf { min-width: 72px; text-align: right; font-variant-numeric: tabular-nums; }
+.meter-row .mf small { font-weight: 700; opacity: 0.6; }
+.next { margin: 10px 0 0; font-size: 13px; font-weight: 700; }
 .toggle { display: flex; align-items: center; gap: 12px; padding: 10px 4px; font-weight: 800; font-size: 18px; cursor: pointer; text-align: left; }
 .toggle input { appearance: none; -webkit-appearance: none; width: 52px; height: 30px; border-radius: 999px; border: 3px solid var(--ink); background: #d9c9b0; position: relative; flex: none; cursor: pointer; transition: background 0.15s; }
 .toggle input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); transition: transform 0.15s; }

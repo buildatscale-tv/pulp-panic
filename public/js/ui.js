@@ -1,5 +1,6 @@
 // DOM screens: menu, HUD, pause, results, collection, settings, help.
 import { BLADES, BACKDROPS, paintBackdrop } from './themes.js';
+import { MODES } from './modes.js';
 import { drawTrail } from './game.js';
 import { TROPHIES } from './trophies.js';
 
@@ -312,9 +313,52 @@ export class UI {
     $('#setMusic').checked = s.music;
     $('#setShake').checked = s.shake;
     $('#setMouse').checked = s.mouseHold;
-    const d = this.store.data;
-    $('#statsLine').textContent = `Rounds played: ${d.games}. Fruit sliced: ${d.fruits}. Best combo: ${d.bestCombo}.`;
+    this.renderStats();
     this.open('settings');
+  }
+
+  // KPI tiles and meter lists for the saved stats.
+  renderStats() {
+    const d = this.store.data;
+    const fmt = (n) => (n >= 10000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, '')}K` : n.toLocaleString('en-US'));
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    $('#statKpis').innerHTML = [
+      ['Rounds played', d.games],
+      ['Fruit sliced', d.fruits],
+      ['Best combo', d.bestCombo],
+    ].map(([k, v]) => `<div class="kpi"><span class="kl">${k}</span><span class="kv">${fmt(v)}</span></div>`).join('');
+
+    const meter = (name, val, max, fig, tip) => {
+      const pct = max > 0 ? Math.min(100, (val / max) * 100) : 0;
+      return `<div class="meter-row" title="${esc(tip)}"><span class="mn">${esc(name)}</span>`
+        + `<span class="mb" role="meter" aria-label="${esc(tip)}" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="${Math.min(val, max)}"><i style="width:${pct}%"></i></span>`
+        + `<span class="mf">${fig}</span></div>`;
+    };
+
+    // Trophy score targets per mode, from the trophy list.
+    const targets = { arcade: [200, 350], classic: [100, 250], zen: [150] };
+    $('#statBest').innerHTML = Object.keys(targets).map((id) => {
+      const best = d.best[id] || 0;
+      const next = targets[id].find((t) => t > best);
+      const name = MODES[id].name;
+      if (next === undefined) return meter(name, 1, 1, `${fmt(best)} <small>★</small>`, `${name} best ${best}. All ${name} score trophies earned.`);
+      return meter(name, best, next, `${fmt(best)} <small>/ ${fmt(next)}</small>`, `${name} best ${best}. Next trophy at ${next}.`);
+    }).join('');
+
+    const got = TROPHIES.filter((t) => d.trophies[t.id]).length;
+    const unlocks = [...BLADES.map((b) => ({ ...b, kind: 'blade' })), ...BACKDROPS.map((b) => ({ ...b, kind: 'backdrop' }))]
+      .filter((u) => u.need > d.seeds)
+      .sort((a, b) => a.need - b.need);
+    const nextUnlock = unlocks[0];
+    $('#statProgress').innerHTML = [
+      meter('Trophies', got, TROPHIES.length, `${got} <small>/ ${TROPHIES.length}</small>`, `${got} of ${TROPHIES.length} trophies earned.`),
+      nextUnlock
+        ? meter('Seeds', d.seeds, nextUnlock.need, `${fmt(d.seeds)} <small>/ ${fmt(nextUnlock.need)}</small>`, `${d.seeds} seeds. ${nextUnlock.name} ${nextUnlock.kind} unlocks at ${nextUnlock.need}.`)
+        : meter('Seeds', 1, 1, `${fmt(d.seeds)} <small>★</small>`, `${d.seeds} seeds. Everything is unlocked.`),
+    ].join('');
+    $('#statNext').textContent = nextUnlock
+      ? `Next unlock: ${nextUnlock.name} ${nextUnlock.kind}, ${nextUnlock.need - d.seeds} seeds to go.`
+      : 'Every blade and backdrop is unlocked.';
   }
 
   openCollection() {
